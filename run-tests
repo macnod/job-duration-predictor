@@ -1,0 +1,10 @@
+#!/bin/bash
+
+#
+# Run this from the repo's root directory!
+#
+# Remember to run source predictor-venv/bin/activate before running these tests.
+#
+
+echo "Running tests"
+python -m unittest discover -s tests -v

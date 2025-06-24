@@ -1,0 +1,7 @@
+black
+holidays
+pandas
+psycopg2-binary
+python-lsp-server[all]
+scikit-learn
+sqlalchemy
