@@ -98,7 +98,7 @@ class APITest(unittest.TestCase):
         # Ensure the process is terminated
         if cls.api_process:
             cls.api_process.terminate()
-            cls.api_process.wait(timeout=5)
+            cls.api_process.wait(timeout=10)
 
         # Stop the database container
         cls.docker_compose(False)
