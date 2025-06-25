@@ -1,8 +1,9 @@
-import time
 import unittest
 from src.predictor import Predictor
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from datetime import datetime, timedelta
+from time import time
+from typing import Any, Callable
 
 
 class PredictorTest(unittest.TestCase):
@@ -10,6 +11,15 @@ class PredictorTest(unittest.TestCase):
     based on the history of similar job runs.
 
     """
+
+    @classmethod
+    def report(cls, action: Callable, message: str) -> Any:
+        print(f"  - {message}", end="")
+        mark = time()
+        result = action()
+        elapsed_time = time() - mark
+        print(f": {elapsed_time:.2f} seconds")
+        return result
 
     @classmethod
     def docker_compose(cls, up: bool) -> None:
@@ -21,65 +31,44 @@ class PredictorTest(unittest.TestCase):
 
         """
         Predictor.docker_compose(cls.compose_file, cls.docker_project, up, True)
-        # up_or_down: str = "up" if up else "down"
-        # command = [
-        #     "docker",
-        #     "compose",
-        #     "--file",
-        #     cls.compose_file,
-        #     "--project-name",
-        #     cls.docker_project,
-        #     "--progress",
-        #     "quiet",
-        #     up_or_down,
-        # ]
-        # if up_or_down == "up":
-        #     command.append("--detach")
-        # subprocess.run(command, check=True)
-
-    @classmethod
-    def make_db_url(cls):
-        return "postgresql://{}:{}@{}:{}/{}".format(
-            cls.db_user,
-            cls.db_pass,
-            cls.db_host,
-            cls.db_port,
-            cls.db_name,
-        )
 
     @classmethod
     def setUpClass(cls):
+        print("\nInitializing predictor tests")
         cls.epoch = datetime(1970, 1, 1)
-        # Database connection
-        cls.db_user = "jobs-user"
-        cls.db_pass = "jobs-user-password"
-        cls.db_host = "127.0.0.1"
-        cls.db_port = "5433"
-        cls.db_name = "jobs"
+        cls.options = Predictor.default_options()
+        cls.options["db_port"] = 5433
+        cls.options["log_level"] = "warn"
+        cls.options["model"] = ""
         # Start the database container
         cls.compose_file = "tests/docker-compose.yaml"
         cls.docker_project = "predictor-test"
-        cls.docker_compose(True)
-        cls.db_url = cls.make_db_url()
-        max_attempts = 10
-        for attempt in range(max_attempts):
-            try:
-                engine = create_engine(cls.db_url)
-                with engine.connect() as conn:
-                    conn.execute(text("SELECT 1"))
-                break
-            except Exception as e:
-                if attempt >= 7:
-                    print(f"Failed attempt #{attempt}: {e}")
-                time.sleep(2)
-        else:
+        cls.report(
+            lambda: cls.docker_compose(True),
+            "Starting database container"
+        )
+        cls.db_url = Predictor.make_db_url(cls.options)
+        cls.engine = cls.report(
+            lambda: Predictor.wait_for_engine(cls.db_url),
+            "Waiting for the database"
+        )
+        if not cls.engine:
             cls.tearDownClass()
-            raise RuntimeError("Database did not start in time")
+            raise RuntimeError("Database did not start")
         # Initialize the Predictor instance
-        cls.predictor = Predictor()
+        cls.predictor = cls.report(
+            lambda: Predictor(cls.options),
+            "Instantiating predictor"
+        )
         # Insert some bogus records into the job history
         cls.initial_job_count = 1000
-        cls.predictor.insert_bogus_job_history(cls.initial_job_count)
+        cls.report(
+            lambda: cls.predictor.insert_bogus_job_history(
+                cls.initial_job_count
+            ),
+            "Inserting {:d} records into the database".format(
+                cls.initial_job_count)
+        )
 
     @classmethod
     def tearDownClass(cls):
@@ -96,8 +85,9 @@ class PredictorTest(unittest.TestCase):
     def test_init(self):
         self.assertEqual(self.predictor.config["estimators"], 100)
         self.assertEqual(self.predictor.config["job_type"], "default-job")
-        self.assertEqual(self.predictor.db_url, self.make_db_url())
-        self.assertIsNone(self.predictor.model)
+        self.assertEqual(
+            self.predictor.db_url, Predictor.make_db_url(self.options)
+        )
 
     def test_fetch_jobs(self):
         df = self.predictor.fetch_jobs(historical=True)
@@ -113,7 +103,7 @@ class PredictorTest(unittest.TestCase):
         self.assertIsNotNone(self.predictor.model)
         # Insert a new job so that we can test prediction
         start_at = datetime.now()
-        start_at_string = start_at.strftime("%Y-%m-%d %H:%M:%S")
+        start_at_string = Predictor.dt_to_string(start_at)
         job_id = self.predictor.insert_new_job(start_at_string, 1000)
         # Ensure job was inserted
         self.assertIsNotNone(job_id)
@@ -125,13 +115,19 @@ class PredictorTest(unittest.TestCase):
         # duration_estimate, compute duration estimates for those,
         # update the records in the database, and return a dict with
         # job IDs for keys.
-        predictions = self.predictor.predict()
+        result = self.predictor.predict()
+        self.assertTrue("explanation" in result)
+        self.assertTrue("predictions" in result)
+        predictions = result["predictions"]
         self.assertEqual(len(predictions), 1)
-        self.assertTrue(job_id in predictions)
-        prediction = predictions[job_id]
+        prediction = predictions[0]
+        self.assertTrue("id" in prediction)
+        self.assertEqual(prediction["id"], job_id)
         self.assertTrue("duration_estimate" in prediction)
         self.assertTrue("projected_completion" in prediction)
-        self.assertGreater(prediction["projected_completion"], start_at)
+        self.assertGreater(
+            prediction["projected_completion"], Predictor.dt_to_string(start_at)
+        )
         self.assertGreater(prediction["duration_estimate"], 100)
         self.assertGreater(300, prediction["duration_estimate"])
         # Compute the projected completion time here and make sure that it is
@@ -140,9 +136,14 @@ class PredictorTest(unittest.TestCase):
             start_at + timedelta(seconds=prediction["duration_estimate"])
         ).replace(microsecond=0)
         self.assertTrue(
-            abs(self.unixtime(computed)
-                - self.unixtime(prediction['projected_completion']))
-            < 2)
+            abs(
+                self.unixtime(computed)
+                - self.unixtime(
+                    Predictor.dt_from_string(prediction["projected_completion"])
+                )
+            )
+            < 2
+        )
         # Now, check the database directly, to ensure the job was updated
         # with the predicted duration.
         sql = text(
@@ -152,8 +153,7 @@ class PredictorTest(unittest.TestCase):
             where id = :job_id
         """
         )
-        engine = create_engine(self.db_url)
-        with engine.connect() as conn:
+        with self.engine.connect() as conn:
             result = conn.execute(sql, {"job_id": job_id})
             duration_estimate = result.scalar()
             self.assertEqual(duration_estimate, prediction["duration_estimate"])

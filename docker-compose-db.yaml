@@ -1,0 +1,11 @@
+services:
+  postgres:
+    image: postgres:latest
+    environment:
+      POSTGRES_DB: jobs
+      POSTGRES_USER: jobs-user
+      POSTGRES_PASSWORD: jobs-user-password
+    ports:
+      - "5434:5432"
+    volumes:
+      - ./src/init.sql:/docker-entrypoint-initdb.d/init.sql

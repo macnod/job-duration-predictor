@@ -1,0 +1,36 @@
+:host = http://localhost:8000
+
+# Check health
+GET :host/health
+
+# Get a count of the jobs in the job_history table
+GET :host/job-history-length
+
+# Insert some bogus job history records
+POST :host/insert-bogus-job-history
+Content-Type: application/json
+
+{
+  "count": 1000
+}
+
+# Delete all job history records
+POST :host/delete-all-records
+
+# Insert a new job
+POST :host/new-job
+Content-Type: application/json
+
+{
+  "start_at": "2025-06-22 13:48:22",
+  "records_count": 900
+}
+
+# Train model
+POST :host/train
+
+# Predict
+POST :host/predict
+
+# Shutdown
+POST :host/shutdown

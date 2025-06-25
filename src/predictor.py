@@ -1,4 +1,5 @@
 import holidays
+import joblib
 import json
 import logging
 import numpy as np
@@ -7,35 +8,51 @@ import pandas as pd
 import random
 import subprocess
 import sys
+import time
 
 from argparse import ArgumentParser
 from datetime import datetime, timedelta
+from logging import Logger
 from pandas.core.frame import DataFrame
 from pandas.core.series import Series
 from sklearn.ensemble import RandomForestRegressor
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine.base import Engine
 from sqlalchemy.exc import DatabaseError
 from sqlalchemy.sql.elements import TextClause
 from typing import Optional, Union, Any, Tuple
-
-# Set up logging
-logging.basicConfig(
-    level=logging.WARN,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
-)
-logger = logging.getLogger(__name__)
 
 
 class Predictor:
     def __init__(self, command_line_options: Optional[dict[str, Any]] = None):
         self.config = self.build_config(command_line_options)
-        self.db_url = self.make_db_url()
+        levels = {
+            "info": logging.INFO,
+            "warn": logging.WARN,
+            "error": logging.ERROR,
+        }
+        if self.config["log_level"] not in levels:
+            raise ValueError(
+                "log_level must be one of %s",
+                ", ".join(levels)
+            )
+        logging.basicConfig(
+            level=levels[self.config["log_level"]],
+            format="%(asctime)s - %(levelname)s - %(message)s",
+            handlers=[logging.StreamHandler(sys.stdout)],
+        )
+        self.logger = logging.getLogger(__name__)
+        self.db_url = Predictor.make_db_url(self.config)
         if self.config["no_db"]:
             self.engine = None
         else:
-            self.engine = create_engine(self.db_url)
-        self.model = None
+            self.engine = Predictor.wait_for_engine(self.db_url, self.logger)
+        if self.config["model"] and os.path.exists(self.config["model"]):
+            self.model = joblib.load(self.config["model"])
+            self.logger.info(f"Loaded model from {self.config['model']}")
+        else:
+            self.model = None
+            self.logger.info("Starting with no model")
         self.us_holidays = holidays.US()
 
     @staticmethod
@@ -75,6 +92,8 @@ class Predictor:
             "no_db": False,
             "start": None,
             "record_count": None,
+            "model": "/tmp/model.dat",
+            "log_level": "info",
         }
 
     @staticmethod
@@ -95,11 +114,11 @@ class Predictor:
             "training_row_limit": "-l",
         }
         for key, value in Predictor.default_options().items():
-            longname = f"--{key}"
+            longname = f"--{key.replace("_", "-")}"
             shortcut = shortcuts.get(key)
             if key == "no_db":
                 parser.add_argument(
-                    "--no_db", action="store_true", default=False
+                    longname, action="store_true", default=False
                 )
             else:
                 if shortcut:
@@ -108,16 +127,57 @@ class Predictor:
                     parser.add_argument(longname)
         parser.add_argument("command")
         options = parser.parse_args()
-        return {k: v for k, v in vars(options).items() if v is not None}
+        return {
+            k.replace("-", "_"): v
+            for k, v in vars(options).items()
+            if v is not None
+        }
 
-    def make_db_url(self) -> str:
+    @staticmethod
+    def dt_to_string(dt: datetime) -> str:
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+    @staticmethod
+    def dt_from_string(ds: str) -> datetime:
+        return datetime.strptime(ds, "%Y-%m-%d %H:%M:%S")
+
+    @staticmethod
+    def make_db_url(config) -> str:
         return "postgresql://{}:{}@{}:{}/{}".format(
-            self.config["db_user"],
-            self.config["db_pass"],
-            self.config["db_host"],
-            self.config["db_port"],
-            self.config["db_name"],
+            config["db_user"],
+            config["db_pass"],
+            config["db_host"],
+            config["db_port"],
+            config["db_name"],
         )
+
+    @staticmethod
+    def wait_for_engine(
+        db_url: str, logger: Optional[Logger] = None
+    ) -> Optional[Engine]:
+        max_attempts = 10
+        for attempt in range(max_attempts):
+            try:
+                engine = create_engine(db_url)
+                with engine.connect() as conn:
+                    conn.execute(text("SELECT 1"))
+                return engine
+            except Exception as e:
+                if logger and attempt >= max_attempts - 3:
+                    logger.warn(
+                        "%s%d: %s",
+                        "Failed to connect to database on try #",
+                        attempt,
+                        e,
+                    )
+                time.sleep(2)
+        if logger:
+            logger.error(
+                "Failed to connect to database at %s after %d tries",
+                db_url,
+                max_attempts,
+            )
+        return None
 
     def build_config(
         self, command_line_options: Optional[dict[str, Any]] = None
@@ -217,14 +277,24 @@ class Predictor:
                         "limit": self.config["training_row_limit"],
                     },
                 )
-            logger.info(
+            self.logger.info(
                 f"Fetched {len(df)} records for job_type "
                 + self.config["job_type"]
             )
             return df
         except Exception as e:
-            logger.error(f"Error fetching run history: {e}")
+            self.logger.error(f"Error fetching run history: {e}")
             raise
+
+    def job_history_length(self):
+        sql = text("select count(*) from job_history")
+        with self.engine.connect() as conn:
+            try:
+                result = conn.execute(sql)
+                count = result.scalar()
+                return count
+            except DatabaseError as e:
+                raise Exception(f"Database error: {e}")
 
     def engineer_features(self, df: DataFrame) -> Tuple[DataFrame, list]:
         """Engineer features for training or prediction."""
@@ -257,7 +327,7 @@ class Predictor:
         """Train the model on run history data."""
         df = self.fetch_jobs(historical=True)
         if df.empty:
-            logger.warning("No data available for training")
+            self.logger.warning("No data available for training")
             return False
 
         df, features = self.engineer_features(df)
@@ -271,7 +341,10 @@ class Predictor:
             random_state=self.config["random_state"],
         )
         self.model.fit(X, y, sample_weight=weights)
-        logger.info("Model trained successfully")
+        if self.config["model"]:
+            joblib.dump(self.model, self.config["model"])
+            self.logger.info(f"Wrote model to {self.config['model']}")
+        self.logger.info("Model trained successfully")
         return True
 
     def predict(self) -> Optional[dict[str, Union[datetime, int]]]:
@@ -287,14 +360,18 @@ class Predictor:
         exception.
 
         """
-        result = {}
+        result = []
         df = self.fetch_jobs(historical=False)
         if df.empty:
-            logger.info("No jobs need duration predictions")
-            return
+            return {
+                "predictions": result,
+                "explanation": "There are no executing jobs without predictions",
+            }
         if self.model is None:
-            logger.error("Model not trained")
-            raise ValueError("Model not trained")
+            return {
+                "predictions": result,
+                "explanation": "The model has not been trained",
+            }
         df, features = self.engineer_features(df)
         X = df[features]
         predictions = self.model.predict(X)
@@ -304,14 +381,22 @@ class Predictor:
             id = int(id_list[i])
             start_at = start_at_list[i]
             rounded = round(prediction)
-            message = f"Predicted job {id} duration: {rounded} seconds"
-            logger.info(message)
+            message = f"Predicted duration for job {id}: {rounded} seconds"
+            self.logger.info(message)
             self.update_duration_estimate(id, rounded)
-            result[id] = {
-                "duration_estimate": rounded,
-                "projected_completion": start_at + timedelta(seconds=rounded),
-            }
-        return result
+            result.append(
+                {
+                    "id": id,
+                    "duration_estimate": rounded,
+                    "projected_completion": Predictor.dt_to_string(
+                        start_at + timedelta(seconds=rounded)
+                    ),
+                }
+            )
+        return {
+            "predictions": result,
+            "explanation": f"Made predictions for {len(result)} running jobs",
+        }
 
     def update_duration_estimate(self, id: int, prediction: int) -> None:
         """Updates the job_history row specified via the id parameter with the
@@ -423,7 +508,7 @@ class Predictor:
            will process.
 
         """
-        start_at = datetime.strptime(start, "%Y-%m-%d %H:%M:%S")
+        start_at = Predictor.dt_from_string(start)
         sql = text(
             """
             INSERT INTO job_history (job_type, start_at, record_count)
@@ -462,6 +547,8 @@ class Predictor:
 
 if __name__ == "__main__":
     options = Predictor.command_line_options()
+    if "db_port" not in options:
+        options["db_port"] = "5434"
     match options["command"]:
         case "instance-test":
             pred = Predictor(options)
@@ -482,14 +569,14 @@ if __name__ == "__main__":
             print(f"Remaining records: {len(df)}")
         case "start-database":
             Predictor.docker_compose(
-                "tests/docker-compose.yaml",
+                "docker-compose-db.yaml",
                 "predictor-command-line",
                 True,
                 False,
             )
         case "stop-database":
             Predictor.docker_compose(
-                "tests/docker-compose.yaml",
+                "docker-compose-db.yaml",
                 "predictor-command-line",
                 False,
                 False,
@@ -504,6 +591,10 @@ if __name__ == "__main__":
             count = int(pred.config["record_count"])
             id = pred.insert_new_job(start, count)
             print(f"Inserted new job record with ID {id}")
+        case "count-jobs":
+            pred = Predictor(options)
+            count = pred.job_history_length()
+            print(f"Total jobs in job_history table: {count}")
         case "predict":
             pred = Predictor(options)
             result = pred.predict()
@@ -511,5 +602,17 @@ if __name__ == "__main__":
                 print(json.dumps(result, indent=2))
             else:
                 print("No records needed predictions")
+        case "help":
+            commands = [
+                "instance-tests",
+                "insert-bogus-job-history",
+                "clear-job-history",
+                "start-database",
+                "stop-database",
+                "train",
+                "new-job",
+                "predict",
+            ]
+            print(f"Available commands:\n  {'\n  '.join(commands)}")
         case _:
             print(f"Unknown command {options['command']}")
