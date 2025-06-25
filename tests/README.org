@@ -1,0 +1,20 @@
+* Job Duration Predictor (Predictor)
+As the title implies, this software allows you to predict how long a job is going to run based on the history of similar jobs.
+* Overview
+Using PostgreSQL, Predictor keeps a job_history table that it uses to train a model and make predictions. The schema of the table looks like this:
+
+| Field             | Description                                                         |
+|-------------------+---------------------------------------------------------------------|
+| job_type          | An arbitrary string denoting the job type                           |
+| start_at          | Timestamp indicating when the job started                           |
+| end_at            | Timestamp indicating when the job completed                         |
+| record_count      | An integer specifying the number of records that this job processed |
+| duration_estimate | This systems prediction on the duration of the job                  |
+
+For the precise schema, see src/init.sql.
+
+The idea is that immediately after you start a job, you submit information about the job (not including =end_at=, of course) to Predictor, which adds the job to the job history table. When a job completes, you submit the =end_at= date for the job and Predictor updates the associated record in the table.
+
+Periodically, Predictor trains on all the jobs that have already completed, so as to be able to determine how long a job is going to run based on the time the job started (hour of the day, day of week, day of month, and holiday), time-overlap with other jobs that were running at the time, and the number of records the job is processing.
+
+You can ask Predictor to do an estimate, which involves selecting all the jobs that are still running (null =end_at=) and that don't yet have an estimate (null =duration_estimate=), updating their =duration_estimate= field with an estimate, and returning a list of the updated jobs with their estimates and their projected completion times.
