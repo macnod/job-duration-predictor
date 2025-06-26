@@ -8,7 +8,9 @@ app = FastAPI(title="Job Duration Predictor API")
 host = os.getenv("PREDICTOR_API_DB_HOST", "127.0.0.1")
 port = os.getenv("PREDICTOR_API_DB_PORT", "5433")
 log_level = os.getenv("PREDICTOR_API_LOG_LEVEL", "warn")
-predictor = Predictor({"db_port": port, "log_level": log_level})
+predictor = Predictor(
+    {"db_host": host, "db_port": port, "log_level": log_level}
+)
 success_status = "success"
 failure_status = "fail"
 
@@ -32,9 +34,7 @@ async def health_check():
 
 @app.get("/job-history-length")
 async def job_history_length():
-    return {
-        "status": success_status,
-        "count": predictor.job_history_length()}
+    return {"status": success_status, "count": predictor.job_history_length()}
 
 
 @app.post("/insert-bogus-job-history")
@@ -50,10 +50,7 @@ async def insert_bogus_job_history(count: Count):
             "new_count": new_count,
         }
     else:
-        raise HTTPException(
-            status_code=400,
-            detail="Job history is not empty"
-        )
+        raise HTTPException(status_code=400, detail="Job history is not empty")
 
 
 @app.post("/delete-all-records")
@@ -83,16 +80,14 @@ async def new_job(job: NewJob):
         "status": success_status,
         "original_count": original_count,
         "insert_id": id,
-        "new_count": new_count
+        "new_count": new_count,
     }
 
 
 @app.post("/train")
 async def train():
     predictor.train()
-    return {
-        "status": "success"
-    }
+    return {"status": "success"}
 
 
 @app.post("/predict")
@@ -112,12 +107,10 @@ async def shutdown():
     # os.kill(os.getpid(), signal.SIGTERM)
     loop = asyncio.get_running_loop()
     loop.call_soon_threadsafe(loop.stop)
-    return {
-        "status": success_status,
-        "message": "Server is shutting down"
-    }
+    return {"status": success_status, "message": "Server is shutting down"}
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
