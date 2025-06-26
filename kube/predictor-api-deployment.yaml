@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: predictor-api
+  labels:
+    app: predictor-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: predictor-api
+  template:
+    metadata:
+      labels:
+        app: predictor-api
+    spec:
+      containers:
+        - name: predictor-api
+          image: macnod/predictor-api:latest
+          imagePullPolicy: Always
+          env:
+            - name: PREDICTOR_API_DB_HOST
+              value: "postgres-service"
+            - name: PREDICTOR_API_DB_PORT
+              value: "5432"
+            - name: PREDICTOR_API_LOG_LEVEL
+              value: "info"
+      restartPolicy: Always

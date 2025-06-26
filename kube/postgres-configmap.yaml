@@ -20,4 +20,3 @@ kind: ConfigMap
 metadata:
   creationTimestamp: null
   name: postgres-init-sql
-j

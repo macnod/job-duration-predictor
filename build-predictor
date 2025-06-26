@@ -1,3 +1,8 @@
 #!/bin/bash
-
-docker build -qf docker/Dockerfile -t macnod/predictor:0.2 -t macnod/predictor:latest .
+version=0.1
+echo "macnod/predictor-api:$version"
+docker build -qf docker/Dockerfile-api -t macnod/predictor-api:$version -t macnod/predictor-api:latest .
+echo
+echo "macnod/predictor-train:$version"
+docker build -qf docker/Dockerfile-train -t macnod/predictor-train:$version -t macnod/predictor-train:latest .
+echo

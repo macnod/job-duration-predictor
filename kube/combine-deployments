@@ -3,9 +3,11 @@ target="combined-deployment.yaml"
 
 files=(
     "postgres-pvc"
+    "postgres-configmap"
     "postgres-deployment"
     "postgres-service"
-    "predictor-deployment"
+    "predictor-api-deployment"
+    "predictor-train-deployment"
 )
 
 first_file=${files[0]}
