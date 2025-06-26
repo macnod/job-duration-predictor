@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: postgres
+  name: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - image: postgres:latest
+        name: postgres
+        env:
+          - name: POSTGRES_DB
+            value: "jobs"
+          - name: POSTGRES_USER
+            value: "jobs-user"
+          - name: POSTGRES_PASSWORD
+            value: "jobs-user-password"
+        ports:
+          - containerPort: 5432
+        volumeMounts:
+          - name: data
+            mountPath: /var/lib/postgresql/data
+          - name: init
+            mountPath: /docker-entrypoint-initdb.d
+        readinessProbe:
+          exec:
+            command:
+              - sh
+              - -c
+              - "pg_isready -U jobs-user"
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources: {}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: data-pvc
+        - name: init
+          configMap:
+            name: postgres-init-sql
+            items:
+              - key: "init.sql"
+                path: "init.sql"
+status: {}

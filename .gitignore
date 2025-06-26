@@ -198,3 +198,13 @@ cython_debug/
 *~
 \#*\#
 .\#*
+
+# Terraform
+*.tfstate
+*.tfplan
+*.backup
+.terraform
+azurek8s
+*.hcl
+combined-deployment.yaml
+/code.txt

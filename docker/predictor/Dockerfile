@@ -1,0 +1,44 @@
+FROM ubuntu:24.04
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update
+RUN apt-get install -y \
+    binfmt-support \
+    binutils \
+    ca-certificates \
+    curl \
+    git \
+    libexpat1 \
+    libpython3-stdlib \
+    libpython3.12-minimal \
+    libpython3.12-stdlib \
+    libreadline8t64 \
+    libsqlite3-0 \
+    media-types \
+    netbase \
+    openssl \
+    python3 \
+    python3-doc \
+    python3-minimal \
+    python3-pip \
+    python3-tk \
+    python3-venv \
+    python3.12 \
+    python3.12-doc \
+    python3.12-minimal \
+    python3.12-venv \
+    readline-common \
+    readline-doc \
+    tzdata \
+    wget
+RUN apt clean && rm -rf /var/lib/apt/lists/*
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3 1 \
+    && update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
+RUN mkdir /predictor
+COPY requirements.txt /predictor/requirements.txt
+COPY src /predictor/src
+WORKDIR /predictor
+RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
+CMD ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]

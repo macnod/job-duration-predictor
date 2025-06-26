@@ -1,0 +1,103 @@
+* Overview
+This is is a plan for using Terraform and Azure Kubernetes Service (AKS) to create a Kubernetes cluster in Azure.
+
+These instructions largely mirror the instructions in Azure's Kubernetes Service Documentation, Quickstart: [[https://learn.microsoft.com/en-us/azure/aks/learn/quick-kubernetes-deploy-terraform?pivots=development-environment-azure-cli][Deploy and Azure Kubernetes Service (AKS) cluster using Terraform]].
+
+The Terraform code is in the =terraform= directory of this project. You should run the commands listed in the plan in that directory.
+
+* Terraform Code Files
+- [[./providers.tf][providers.tf]]
+- [[./ssh.tf][ssh.tf]]
+- [[./main.tf][main.tf]]
+- [[./variables.tf][variables.tf]]
+- [[./outputs.tf][outputs.tf]]
+
+* Plan
+** Initialize Terraform
+#+begin_src sh
+  terraform init -upgrade
+#+end_src
+** Create Execution Plan
+#+begin_src sh
+  terraform plan -out main.tfplan
+#+end_src
+** Apply Execution Plan
+#+begin_src sh
+  terraform apply main.tfplan
+#+end_src
+** Verify
+*** Get the resource group name
+#+begin_src sh
+  resource_group_name=$(terraform output -raw resource_group_name)
+#+end_src
+*** Display the name of the kubernetes cluster
+#+begin_src sh
+  az aks list --resource-group $resource_group_name \
+    --query "[].{\"K8s cluster name\":name}" --output table
+#+end_src
+*** Get the Kubernetes configuration from Terraform state
+#+begin_src sh
+  echo "$(terraform output kube_config)" > azurek8s
+#+end_src
+*** Clean the azurek8s file
+Take out the =<< EOT= at the beginning of the file and the =EOT= from the end of the file.
+*** Set KUBECONFIG
+#+begin_src sh
+  export KUBECONFIG=./azurek8s
+#+end_src
+*** Verify the health of the cluster
+#+begin_src sh
+  kubectl get nodes
+#+end_src
+* Terraform Code
+#+begin_src elisp
+  (render-files-to-buffer
+    (collect-directory-files 
+      "~/r/job-duration-predictor/terraform/azure" :file-include "\\.tf$")
+    "code.txt")
+#+end_src
+* Current Applied Cluster
+| attribute           | value                                               |
+|---------------------+-----------------------------------------------------|
+| resource group name | rg-positive-albacore                                |
+| k8s cluster name    | cluster-frank-sawfish                               |
+| KUBECONFIG          | ~/r/job-duration-predictor/terraform/azure/azurek8s |
+* Create k8s deployment
+#+begin_src sh
+  kubectl create deployment predictor \
+      --image=macnod/predictor:latest \
+      --replicas=1 -o yaml \
+      > predictor-deployment.yaml
+#+end_src
+
+If the deployment exists, you can delete it, edit it directly, or retrieve the existing one, edit it, and then apply it.
+
+To delete the deployment:
+#+begin_src sh
+  kubectl delete deployment predictor
+#+end_src
+
+To edit the deployment directly:
+#+begin_src sh
+  kubectl edit deployment predictor
+#+end_src
+
+To retrieve the existing deployment:
+#+begin_src sh
+  kubectl get deployment predictor -o yaml > predictor-deployment.yaml
+#+end_src
+
+To apply any changes to predictor-deployment.yaml:
+#+begin_src sh
+  kubectl apply -f predictor-deployment.yaml
+#+end_src
+
+To create a predictor-deploymenty.yaml file without creating the actual deployment:
+#+begin_src sh
+  kubectl create deployment predictor \
+      --image=macnod/predictor:latest \
+      --replicas=1 \
+      --dry-run=client \
+      -o yaml \
+      > predictor-deployment.yaml
+#+end_src

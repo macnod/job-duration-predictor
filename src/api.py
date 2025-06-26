@@ -1,13 +1,13 @@
-import os
-# import signal
 import asyncio
+import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from src.predictor import Predictor
 
 app = FastAPI(title="Job Duration Predictor API")
-port = os.getenv("PREDICTOR_API_DB_PORT", "5434")
-log_level = os.getenv("PREDICTOR_LOG_LEVEL", "warn")
+host = os.getenv("PREDICTOR_API_DB_HOST", "127.0.0.1")
+port = os.getenv("PREDICTOR_API_DB_PORT", "5433")
+log_level = os.getenv("PREDICTOR_API_LOG_LEVEL", "warn")
 predictor = Predictor({"db_port": port, "log_level": log_level})
 success_status = "success"
 failure_status = "fail"
