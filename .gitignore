@@ -208,3 +208,4 @@ azurek8s
 *.hcl
 combined-deployment.yaml
 /code.txt
+/kube/predictor.yaml

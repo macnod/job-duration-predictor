@@ -1,5 +1,5 @@
 #!/bin/bash
-target="combined-deployment.yaml"
+target="predictor.yaml"
 
 files=(
     "postgres-pvc"
