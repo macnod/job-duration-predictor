@@ -60,5 +60,4 @@ jobs:
           else
             env="staging"
           fi
-          ./combine-deployments
           kubectl apply -f kube/predictor-${env}.yaml

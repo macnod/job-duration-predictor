@@ -1,6 +1,6 @@
 ---
 # Source: predictor/templates/predictor.yaml
-# wolf
+# racoon
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -179,7 +179,7 @@ spec:
         spec:
           containers:
             - name: predictor-train
-              image: "0 * * * *"
+              image: macnod/predictor-train:latest
               imagePullPolicy: Always
               env:
                 - name: PREDICTOR_LOG_LEVEL

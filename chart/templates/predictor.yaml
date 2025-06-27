@@ -1,4 +1,4 @@
-# wolf
+# beaver
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -177,7 +177,7 @@ spec:
         spec:
           containers:
             - name: predictor-train
-              image: {{ .Values.predictorTrain.schedule }}
+              image: {{ .Values.predictorTrain.image }}
               imagePullPolicy: Always
               env:
                 - name: PREDICTOR_LOG_LEVEL
