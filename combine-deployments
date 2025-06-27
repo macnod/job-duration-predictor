@@ -2,9 +2,16 @@
 
 # Must be run from the repo's root folder
 
-target="kube/predictor.yaml"
+target="kube/predictor-template.yaml"
 helm_templates="chart/templates/predictor.yaml"
 temp="kube/temp.yaml"
+
+production_release="predictor-production"
+production_values="./chart/values-production.yaml"
+production="kube/predictor-production.yaml"
+staging_release="predictor-staging"
+staging_values="./chart/values-staging.yaml"
+staging="kube/predictor-staging.yaml"
 
 files=(
     "namespace"
@@ -45,8 +52,20 @@ if [[ -f "$target" ]]; then
         answer=$(echo "$answer" | tr '[:upper:]' '[:lower:]')
         if [[ "$answer" == "yes" ]]; then
             mv "$temp" "$target"
+            helm template --name $staging_release \
+                 chart \
+                 -f $staging_values \
+                 > $staging
+            helm template --name $production_release \
+                 chart \
+                 -f $production_values \
+                 > $production
             cp "$target" "$helm_templates"
-            echo "Updated $target."
+            echo "Updated:"
+            echo "  $target"
+            echo "  $staging"
+            echo "  $production"
+            echo "  $helm_templates"
         else
             echo "Did not update $target."
         fi
@@ -55,5 +74,17 @@ if [[ -f "$target" ]]; then
     fi
 else
     mv "$temp" "$target"
-    echo "Created $target."
+    helm template --name $staging_release \
+         chart \
+         -f $staging_values \
+         > $staging
+    helm template --name $production_release \
+         chart \
+         -f $production_values \
+         > $production
+    echo "Created:"
+    echo "  $target"
+    echo "  $staging"
+    echo "  $production"
+    echo "  $helm_templates"
 fi

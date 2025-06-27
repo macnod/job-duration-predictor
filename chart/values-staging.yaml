@@ -1,4 +1,4 @@
-namespace: predictor-production
+namespace: predictor-staging
 
 predictorApi:
   image: macnod/predictor-api:latest
