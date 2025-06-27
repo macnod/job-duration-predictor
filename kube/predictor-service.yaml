@@ -2,13 +2,13 @@ apiVersion: v1
 kind: Service
 metadata:
   name: predictor-service
-  namespace: predictor
+  namespace: {{ .Values.namespace }}
   labels:
     app: predictor-service
 spec:
   type: LoadBalancer
   ports:
-    - port: 80
+    - port: {{ .Values.loadBalancer.port }}
       targetPort: 8000
   selector:
     app: predictor-api

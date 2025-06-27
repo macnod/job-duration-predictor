@@ -22,17 +22,6 @@ class PredictorTest(unittest.TestCase):
         return result
 
     @classmethod
-    def docker_compose(cls, up: bool) -> None:
-        """Helper method to run docker compose commands.
-
-        Arguments:
-        up: True if you want to bring up the containers, False if you want to
-            shut them down. Turns into "up" or "down" after "docker compose"
-
-        """
-        Predictor.docker_compose(cls.compose_file, cls.docker_project, up, True)
-
-    @classmethod
     def setUpClass(cls):
         print("\nInitializing predictor tests")
         cls.epoch = datetime(1970, 1, 1)
@@ -40,26 +29,13 @@ class PredictorTest(unittest.TestCase):
         cls.options["db_port"] = 5433
         cls.options["log_level"] = "warn"
         cls.options["model"] = ""
-        # Start the database container
-        cls.compose_file = "tests/docker-compose.yaml"
-        cls.docker_project = "predictor-test"
-        cls.report(
-            lambda: cls.docker_compose(True),
-            "Starting database container"
-        )
-        cls.db_url = Predictor.make_db_url(cls.options)
-        cls.engine = cls.report(
-            lambda: Predictor.wait_for_engine(cls.db_url),
-            "Waiting for the database"
-        )
-        if not cls.engine:
-            cls.tearDownClass()
-            raise RuntimeError("Database did not start")
         # Initialize the Predictor instance
         cls.predictor = cls.report(
             lambda: Predictor(cls.options),
             "Instantiating predictor"
         )
+        # Clear the database
+        cls.predictor.clear_job_history()
         # Insert some bogus records into the job history
         cls.initial_job_count = 1000
         cls.report(
@@ -69,11 +45,6 @@ class PredictorTest(unittest.TestCase):
             "Inserting {:d} records into the database".format(
                 cls.initial_job_count)
         )
-
-    @classmethod
-    def tearDownClass(cls):
-        # Stop the database container
-        cls.docker_compose(False)
 
     def unixtime(self, dt: datetime) -> int:
         """Returns the time represented by dt as unix time (the number of
@@ -153,7 +124,7 @@ class PredictorTest(unittest.TestCase):
             where id = :job_id
         """
         )
-        with self.engine.connect() as conn:
+        with self.predictor.engine.connect() as conn:
             result = conn.execute(sql, {"job_id": job_id})
             duration_estimate = result.scalar()
             self.assertEqual(duration_estimate, prediction["duration_estimate"])

@@ -6,6 +6,12 @@
 # Remember to run source predictor-venv/bin/activate before running these tests.
 #
 
+echo "Starting database container..."
+docker compose --file="tests/docker-compose.yaml" \
+    --project-name="predictor-tests" \
+    --progress=quiet \
+    up --detach
+
 if [ -z "$1" ]; then
     echo "Running all tests..."
     python -m unittest discover -s tests -v
@@ -13,3 +19,17 @@ else
     echo "Running test: $1"
     python -m unittest tests.$1 -v
 fi
+
+test_exit_code=$?
+
+echo "Stopping database container..."
+docker compose --file="tests/docker-compose.yaml" \
+    --project-name="predictor-tests" \
+    --progress=quiet \
+    down
+if [[ $test_exit_code -eq 0 ]]; then
+    echo "PASS"
+else
+    echo "FAIL"
+fi
+exit $test_exit_code

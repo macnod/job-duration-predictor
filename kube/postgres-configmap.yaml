@@ -1,9 +1,8 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  creationTimestamp: null
   name: postgres-init-sql
-  namespace: predictor
+  namespace: {{ .Values.namespace }}
 data:
   init.sql: |
     \c jobs

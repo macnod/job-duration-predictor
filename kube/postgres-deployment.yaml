@@ -1,16 +1,15 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  name: postgres
+  namespace: {{ .Values.namespace }}
   labels:
     app: postgres
-  name: postgres
-  namespace: predictor
 spec:
   replicas: 1
   selector:
     matchLabels:
       app: postgres
-  strategy: {}
   template:
     metadata:
       labels:
@@ -43,7 +42,6 @@ spec:
               - "pg_isready -U jobs-user"
           initialDelaySeconds: 5
           periodSeconds: 10
-        resources: {}
       volumes:
         - name: data
           persistentVolumeClaim:
@@ -54,4 +52,3 @@ spec:
             items:
               - key: "init.sql"
                 path: "init.sql"
-status: {}

@@ -2,11 +2,11 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: predictor-api
-  namespace: predictor
+  namespace: {{ .Values.namespace }}
   labels:
     app: predictor-api
 spec:
-  replicas: 2
+  replicas: {{ .Values.predictorApi.replicas }}
   selector:
     matchLabels:
       app: predictor-api
@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: predictor-api
-          image: macnod/predictor-api:latest
+          image: {{ .Values.predictorApi.image }}
           imagePullPolicy: Always
           env:
             - name: PREDICTOR_API_DB_HOST

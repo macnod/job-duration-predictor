@@ -1,0 +1,15 @@
+namespace: predictor
+
+predictorApi:
+  image: macnod/predictor-api:latest
+  replicas: 2
+
+predictorTrain:
+  image: macnod/predictor-train:latest
+  schedule: '"0 * * * *"'
+
+postgres:
+  storage: 10Gi
+
+loadBalancer:
+  port: 80

@@ -1,4 +1,3 @@
-import asyncio
 import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -100,14 +99,6 @@ async def predict():
         "explanation": result["explanation"],
         "predictions": result["predictions"],
     }
-
-
-@app.post("/shutdown")
-async def shutdown():
-    # os.kill(os.getpid(), signal.SIGTERM)
-    loop = asyncio.get_running_loop()
-    loop.call_soon_threadsafe(loop.stop)
-    return {"status": success_status, "message": "Server is shutting down"}
 
 
 if __name__ == "__main__":

@@ -45,7 +45,7 @@ if [[ -f "$target" ]]; then
         answer=$(echo "$answer" | tr '[:upper:]' '[:lower:]')
         if [[ "$answer" == "yes" ]]; then
             mv "$temp" "$target"
-            cp "$target"
+            cp "$target" "$helm_templates"
             echo "Updated $target."
         else
             echo "Did not update $target."
