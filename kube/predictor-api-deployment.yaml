@@ -15,6 +15,21 @@ spec:
       labels:
         app: predictor-api
     spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:latest
+          command:
+            - sh
+            - -c
+            - |
+              until pg_isready -h postgres-service -p 5432 -U jobs-user; do
+                echo "Waiting for PostgreSQL..."
+                sleep 2
+              done
+              echo "PostgreSQL is ready!"
+          env:
+            - name: PGPASSWORD
+              value: "jobs-user-password"
       containers:
         - name: predictor-api
           image: {{ .Values.predictorApi.image }}

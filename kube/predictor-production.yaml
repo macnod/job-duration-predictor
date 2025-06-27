@@ -1,6 +1,6 @@
 ---
 # Source: predictor/templates/predictor.yaml
-# racoon
+# beaver
 apiVersion: v1
 kind: Namespace
 metadata:
