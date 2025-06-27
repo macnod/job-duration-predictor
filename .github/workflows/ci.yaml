@@ -56,8 +56,7 @@ jobs:
       - name: Deploy to Kubernetes
         run: |
           if [ "${{ github.ref }}" == "refs/heads/master" ]; then
-            env="production"
+            kubectl apply -f kube/predictor-production.yaml
           else
-            env="staging"
+            kubectl apply -f kube/predictor-staging.yaml
           fi
-          kubectl apply -f kube/predictor-${env}.yaml
