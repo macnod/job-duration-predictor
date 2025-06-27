@@ -28,21 +28,21 @@ The Terraform code is in the =terraform= directory of this project. You should r
   - [X] predictor-train-cron
 - [X] Create a script to combine the Kubernetes configuration files into predictor.yaml
 - [X] Deploy predictor to Kubernetes cluster and test manually
-- [ ] Use helm charts to template deployments for various environments
-- [ ] Use GitHub Actions to:
-  - [ ] Run tests
-  - [ ] When tests succeed:
-    - [ ] For master branch, deploy to production
-    - [ ] For staging branch, deploy to staging
+- [X] Use helm charts to template deployments for various environments
+- [-] Use GitHub Actions to:
+  - [X] Run tests
+  - [-] When tests succeed:
+    - [X] For master branch, deploy to production
+    - [X] For staging branch, deploy to staging
     - [ ] If environment specified in commit, deploy to environment
-- [ ] Make the database available externally, via kubectl tunnel
+- [X] Make the database available externally, via kubectl tunnel
 - [ ] Add some endpoints to the predictor service
   - [ ] Get running jobs
   - [ ] Get all jobs, paged, from latest to oldest
-- [ ] Diagram system
+- [X] Diagram system
 - [ ] Create a presentation
 - [ ] Create a README
-- [ ] Send a link to all this work to
+- [X] Send a link to all this work to Ivanti
 * Code
 ** Everything
 
@@ -340,6 +340,10 @@ This is to make postgres available to other containers
 ** Get Public IP
 #+begin_src sh
   kubectl get service -n predictor
+#+end_src
+** Tunnel to Database
+#+begin_src sh
+  kubectl port-forward {pod} 5433:5432 -n predictor-production
 #+end_src
 * Helm
 ** Create template

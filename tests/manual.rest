@@ -1,3 +1,6 @@
+# local
+# :host = http://127.0.0.1:8000
+
 # predictor
 # :host = http://20.228.64.1
 

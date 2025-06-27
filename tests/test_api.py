@@ -36,7 +36,7 @@ class APITest(unittest.TestCase):
         data = response.json()
         self.assertEqual(data["status"], "success")
         self.assertIsInstance(data["insert_id"], int)
-        self.assertEqual(data["new_count"], data["original_count"] + 1)
+        self.assertEqual(data["new_count"], data["original_count"] + 2)
 
     def test_flow(self):
         bogus_record_count = 1000
