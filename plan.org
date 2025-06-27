@@ -1,0 +1,324 @@
+* Overview
+This is is a plan for using Terraform and Azure Kubernetes Service (AKS) to create a Kubernetes cluster in Azure.
+
+These instructions largely mirror the instructions in Azure's Kubernetes Service Documentation, Quickstart: [[https://learn.microsoft.com/en-us/azure/aks/learn/quick-kubernetes-deploy-terraform?pivots=development-environment-azure-cli][Deploy and Azure Kubernetes Service (AKS) cluster using Terraform]].
+
+The Terraform code is in the =terraform= directory of this project. You should run the commands listed in the plan in that directory.
+
+* To Do
+- [X] Create Predictor, a Python command-line utility and web service that predicts how long running jobs are going to take to complete
+  - [X] Design database schema (init.sql)
+  - [X] predictor.py (command-line utility and backend object)
+  - [X] api.py (api service)
+  - [X] Tests for predictor and api, including a script to run all the tests
+  - [X] A manual.rest file that allows easy manual testing of API endpoints
+- [X] Using Terraform, create a Kubernetes cluster in Azure that includes a load balancer
+- [X] Dockerize Predictor
+  - [X] Predictor web service
+  - [X] Periodic Predictor Training
+  - [X] Build script (build-predictor) that builds and pushes docker images
+- [X] Create Kubernetes configuration files to deploy Predictor to the cluster
+  - [X] namespace
+  - [X] postgres-pvc
+  - [X] postgres-configmap
+  - [X] postgres-deployment
+  - [X] postgres-service
+  - [X] predictor-api-deployment
+  - [X] predictor-service
+  - [X] predictor-train-cron
+- [X] Create a script to combine the Kubernetes configuration files into predictor.yaml
+- [X] Deploy predictor to Kubernetes cluster and test manually
+- [ ] Use helm charts to template deployments for various environments
+- [ ] Use GitHub Actions to:
+  - [ ] Run tests
+  - [ ] When tests succeed:
+    - [ ] For master branch, deploy to production
+    - [ ] For staging branch, deploy to staging
+    - [ ] If environment specified in commit, deploy to environment
+- [ ] Make the database available externally, via kubectl tunnel
+- [ ] Add some endpoints to the predictor service
+  - [ ] Get running jobs
+  - [ ] Get all jobs, paged, from latest to oldest
+- [ ] Diagram system
+- [ ] Create a presentation
+- [ ] Create a README
+- [ ] Send a link to all this work to 
+* Terraform Code Files
+- [[./providers.tf][providers.tf]]
+- [[./ssh.tf][ssh.tf]]
+- [[./main.tf][main.tf]]
+- [[./variables.tf][variables.tf]]
+- [[./outputs.tf][outputs.tf]]
+
+* Terraform Plan
+** Initialize Terraform
+#+begin_src sh
+  terraform init -upgrade
+#+end_src
+** Create Execution Plan
+#+begin_src sh
+  terraform plan -out main.tfplan
+#+end_src
+** Apply Execution Plan
+#+begin_src sh
+  terraform apply main.tfplan
+#+end_src
+** Verify
+*** Get the resource group name
+#+begin_src sh
+  resource_group_name=$(terraform output -raw resource_group_name)
+#+end_src
+*** Display the name of the kubernetes cluster
+#+begin_src sh
+  az aks list --resource-group $resource_group_name \
+    --query "[].{\"K8s cluster name\":name}" --output table
+#+end_src
+*** Get the Kubernetes configuration from Terraform state
+#+begin_src sh
+  echo "$(terraform output kube_config)" > azurek8s
+#+end_src
+*** Clean the azurek8s file
+Take out the =<< EOT= at the beginning of the file and the =EOT= from the end of the file.
+*** Set KUBECONFIG
+#+begin_src sh
+  export KUBECONFIG=./azurek8s
+#+end_src
+*** Verify the health of the cluster
+#+begin_src sh
+  kubectl get nodes
+#+end_src
+* Terraform Code
+#+begin_src elisp
+  (render-files-to-buffer
+    (collect-directory-files 
+      "~/r/job-duration-predictor/terraform/azure" :file-include "\\.tf$")
+    "code.txt")
+#+end_src
+* Current Applied Cluster
+| attribute           | value                                               |
+|---------------------+-----------------------------------------------------|
+| resource group name | rg-positive-albacore                                |
+| k8s cluster name    | cluster-frank-sawfish                               |
+| KUBECONFIG          | ~/r/job-duration-predictor/terraform/azure/azurek8s |
+* Create k8s resources
+** predictor namespace
+namespace.yaml
+#+begin_src yaml
+  apiVersion: v1
+  kind: Namespace
+  metadata:
+    name: predictor
+#+end_src
+** predictor-api deployment
+*** Create
+To create a predictor-deploymenty.yaml file without creating the actual deployment:
+#+begin_src sh
+  kubectl create deployment predictor-api \
+      --image=macnod/predictor-api:latest \
+      --replicas=1 \
+      --dry-run=client \
+      -o yaml \
+      > predictor-api-deployment.yaml
+#+end_src
+
+If the deployment exists, you can delete it, edit it directly, or retrieve the existing one, edit it, and then apply it.
+
+To delete the deployment:
+#+begin_src sh
+  kubectl delete deployment predictor-api
+#+end_src
+
+To edit the deployment directly:
+#+begin_src sh
+  kubectl edit deployment predictor-api
+#+end_src
+
+To retrieve the existing deployment:
+#+begin_src sh
+  kubectl get deployment predictor -o yaml > predictor-api-deployment.yaml
+#+end_src
+
+To apply any changes to predictor-deployment.yaml:
+#+begin_src sh
+  kubectl apply -f predictor-api-deployment.yaml
+#+end_src
+*** Modifications
+Add to spec:
+#+begin_src diff
+  --- predictor-api-deployment.yaml	2025-06-26 14:34:34.205606340 -0700
+  +++ /home/macnod/r/job-duration-predictor/kube/predictor-api-deployment.yaml	2025-06-26 11:11:23.631921185 -0700
+  @@ -1,24 +1,29 @@
+   apiVersion: apps/v1
+   kind: Deployment
+   metadata:
+  -  creationTimestamp: null
+  +  name: predictor-api
+  +  namespace: predictor
+     labels:
+       app: predictor-api
+  -  name: predictor-api
+   spec:
+  -  replicas: 1
+  +  replicas: 2
+     selector:
+       matchLabels:
+         app: predictor-api
+  -  strategy: {}
+     template:
+       metadata:
+  -      creationTimestamp: null
+         labels:
+           app: predictor-api
+       spec:
+         containers:
+  -      - image: macnod/predictor-api
+  -        name: predictor-api
+  -        resources: {}
+  -status: {}
+  +        - name: predictor-api
+  +          image: macnod/predictor-api:latest
+  +          imagePullPolicy: Always
+  +          env:
+  +            - name: PREDICTOR_API_DB_HOST
+  +              value: "postgres-service"
+  +            - name: PREDICTOR_API_DB_PORT
+  +              value: "5432"
+  +            - name: PREDICTOR_API_LOG_LEVEL
+  +              value: "info"
+  +      restartPolicy: Always
+#+end_src
+** postgres pvc
+#+begin_src yaml
+  apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: postgres-pvc
+    namespace: predictor
+  spec:
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: 10Gi
+#+end_src
+** postgres configmap
+#+begin_src yaml
+  apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    creationTimestamp: null
+    name: postgres-init-sql
+    namespace: predictor
+  data:
+    init.sql: |
+      \c jobs
+
+      CREATE TABLE job_history(
+          id SERIAL PRIMARY KEY,
+          job_type TEXT NOT NULL,
+          start_at TIMESTAMP NOT NULL,
+          end_at TIMESTAMP,
+          record_count INTEGER,
+          duration_estimate INTEGER,
+          CONSTRAINT valid_date_range CHECK (end_at IS NULL OR end_at >= start_at)
+      );
+
+      CREATE INDEX idx_job_history_job_type ON job_history (job_type);
+      CREATE INDEX idx_job_history_start_at ON job_history (start_at);
+      CREATE INDEX idx_job_history_end_at ON job_history (end_at);
+#+end_src
+** postgres deployment
+*** create
+#+begin_src sh
+  kubectl create deployment postgres \
+    --image=postgres:latest \
+    --replicas=1 \
+    --dry-run=client \
+    -o yaml \
+    > postgres-deployment.yaml
+#+end_src
+*** modify
+These modifications amount to removing some null settings, adding some environment variables, mounting the persistent data volume, and mounting the init.sql script.
+#+begin_src diff
+  --- postgres-deployment.yaml	2025-06-26 14:49:38.559977599 -0700
+  +++ /home/macnod/r/job-duration-predictor/kube/postgres-deployment.yaml	2025-06-26 11:33:00.206946446 -0700
+  @@ -1,10 +1,10 @@
+   apiVersion: apps/v1
+   kind: Deployment
+   metadata:
+  -  creationTimestamp: null
+     labels:
+       app: postgres
+     name: postgres
+  +  namespace: predictor
+   spec:
+     replicas: 1
+     selector:
+  @@ -13,12 +13,45 @@
+     strategy: {}
+     template:
+       metadata:
+  -      creationTimestamp: null
+         labels:
+           app: postgres
+       spec:
+         containers:
+  -      - image: postgres:latest
+  -        name: postgres
+  +      - name: postgres
+  +        image: postgres:latest
+  +        env:
+  +          - name: PGDATA
+  +            value: /var/lib/postgresql/data/pgdata
+  +          - name: POSTGRES_DB
+  +            value: "jobs"
+  +          - name: POSTGRES_USER
+  +            value: "jobs-user"
+  +          - name: POSTGRES_PASSWORD
+  +            value: "jobs-user-password"
+  +        ports:
+  +          - containerPort: 5432
+  +        volumeMounts:
+  +          - name: data
+  +            mountPath: /var/lib/postgresql/data
+  +          - name: init
+  +            mountPath: /docker-entrypoint-initdb.d
+  +        readinessProbe:
+  +          exec:
+  +            command:
+  +              - sh
+  +              - -c
+  +              - "pg_isready -U jobs-user"
+  +          initialDelaySeconds: 5
+  +          periodSeconds: 10
+           resources: {}
+  +      volumes:
+  +        - name: data
+  +          persistentVolumeClaim:
+  +            claimName: postgres-pvc
+  +        - name: init
+  +          configMap:
+  +            name: postgres-init-sql
+  +            items:
+  +              - key: "init.sql"
+  +                path: "init.sql"
+   status: {}
+#+end_src
+** postgres service
+This is to make postgres available to other containers
+#+begin_src yaml
+  apiVersion: v1
+  kind: Service
+  metadata:
+    name: postgres-service
+    namespace: predictor
+    labels:
+      app: postgres
+  spec:
+    selector:
+      app: postgres
+    ports:
+      - protocol: TCP
+        port: 5432
+        targetPort: 5432
+#+end_src

@@ -1,4 +1,9 @@
 apiVersion: v1
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  name: postgres-init-sql
+  namespace: predictor
 data:
   init.sql: |
     \c jobs
@@ -16,7 +21,3 @@ data:
     CREATE INDEX idx_job_history_job_type ON job_history (job_type);
     CREATE INDEX idx_job_history_start_at ON job_history (start_at);
     CREATE INDEX idx_job_history_end_at ON job_history (end_at);
-kind: ConfigMap
-metadata:
-  creationTimestamp: null
-  name: postgres-init-sql

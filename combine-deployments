@@ -1,0 +1,59 @@
+#!/bin/bash
+
+# Must be run from the repo's root folder
+
+target="kube/predictor.yaml"
+helm_templates="chart/templates/predictor.yaml"
+temp="kube/temp.yaml"
+
+files=(
+    "namespace"
+    "postgres-pvc"
+    "postgres-configmap"
+    "postgres-deployment"
+    "postgres-service"
+    "predictor-api-deployment"
+    "predictor-service"
+    "predictor-train-cron"
+)
+
+first_file=${files[0]}
+last_file=${files[-1]}
+echo "Creating or updating $target with:"
+for file in ${files[@]}; do
+    filename="kube/$file.yaml"
+    echo "    $filename"
+    if [[ "$file" == "$first_file" ]]; then
+        cat "$filename" > "$temp"
+    else
+        cat "$filename" >> "$temp"
+    fi
+    if [[ "$file" != "$last_file" ]]; then
+        echo >> "$temp"
+        echo "---" >> "$temp"
+    fi
+done
+echo
+
+if [[ -f "$target" ]]; then
+    diff_output=$(diff "$target" "$temp")
+    diff_status=$?
+    if [[ $diff_status -ne 0 ]]; then
+        echo "Detected these changes:"
+        echo "$diff_output"
+        read -p "Do you want to proceed? (yes/NO) " answer
+        answer=$(echo "$answer" | tr '[:upper:]' '[:lower:]')
+        if [[ "$answer" == "yes" ]]; then
+            mv "$temp" "$target"
+            cp "$target"
+            echo "Updated $target."
+        else
+            echo "Did not update $target."
+        fi
+    else
+        echo "No changes."
+    fi
+else
+    mv "$temp" "$target"
+    echo "Created $target."
+fi

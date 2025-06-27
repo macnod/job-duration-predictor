@@ -1,8 +1,16 @@
 #!/bin/bash
 version=0.1
-echo "macnod/predictor-api:$version"
+echo "Building:"
+echo "  macnod/predictor-api:$version"
+echo -n "  "
 docker build -qf docker/Dockerfile-api -t macnod/predictor-api:$version -t macnod/predictor-api:latest .
 echo
-echo "macnod/predictor-train:$version"
+echo "  macnod/predictor-train:$version"
+echo -n "  "
 docker build -qf docker/Dockerfile-train -t macnod/predictor-train:$version -t macnod/predictor-train:latest .
 echo
+echo "Pushing:"
+echo -n "  "
+echo $(docker push -qa macnod/predictor-api)
+echo -n "  "
+echo $(docker push -qa macnod/predictor-train)

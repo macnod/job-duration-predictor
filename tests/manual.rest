@@ -1,4 +1,4 @@
-:host = http://localhost:8000
+:host = http://20.228.64.1
 
 # Check health
 GET :host/health
@@ -22,8 +22,8 @@ POST :host/new-job
 Content-Type: application/json
 
 {
-  "start_at": "2025-06-22 13:48:22",
-  "records_count": 900
+  "start_at": "2025-06-26 12:03:00",
+  "record_count": 900
 }
 
 # Train model

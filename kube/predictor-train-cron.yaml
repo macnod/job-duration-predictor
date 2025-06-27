@@ -1,0 +1,26 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: predictor-train-cron
+  namespace: predictor
+spec:
+  schedule: "0 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: predictor-train
+        spec:
+          containers:
+            - name: predictor-train
+              image: macnod/predictor-train:latest
+              imagePullPolicy: Always
+              env:
+                - name: PREDICTOR_DB_HOST
+                  value: "postgres-service"
+                - name: PREDICTOR_DB_PORT
+                  value: "5432"
+                - name: PREDICTOR_LOG_LEVEL
+                  value: "info"
+          restartPolicy: Never

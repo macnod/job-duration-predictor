@@ -209,3 +209,6 @@ azurek8s
 combined-deployment.yaml
 /code.txt
 /kube/predictor.yaml
+/kube/temp.yaml
+/terraform/azure/instructions.pdf
+/terraform/azure/instructions.tex

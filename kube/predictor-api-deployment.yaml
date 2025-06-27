@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: predictor-api
+  namespace: predictor
   labels:
     app: predictor-api
 spec:

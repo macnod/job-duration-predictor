@@ -1,10 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  creationTimestamp: null
   labels:
     app: postgres
   name: postgres
+  namespace: predictor
 spec:
   replicas: 1
   selector:
@@ -13,14 +13,15 @@ spec:
   strategy: {}
   template:
     metadata:
-      creationTimestamp: null
       labels:
         app: postgres
     spec:
       containers:
-      - image: postgres:latest
-        name: postgres
+      - name: postgres
+        image: postgres:latest
         env:
+          - name: PGDATA
+            value: /var/lib/postgresql/data/pgdata
           - name: POSTGRES_DB
             value: "jobs"
           - name: POSTGRES_USER
@@ -46,7 +47,7 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: data-pvc
+            claimName: postgres-pvc
         - name: init
           configMap:
             name: postgres-init-sql

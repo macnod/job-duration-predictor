@@ -1,7 +1,13 @@
+asyncio
 black
+fastapi
 holidays
+httpx
 pandas
 psycopg2-binary
+python-json-logger
 python-lsp-server[all]
+requests
 scikit-learn
 sqlalchemy
+uvicorn
