@@ -104,7 +104,9 @@ Take out the =<< EOT= at the beginning of the file and the =EOT= from the end of
 | resource group name | rg-positive-albacore                                |
 | k8s cluster name    | cluster-frank-sawfish                               |
 | KUBECONFIG          | ~/r/job-duration-predictor/terraform/azure/azurek8s |
-| Public IP           | 20.228.64.1                                         |
+| Original IP         | 20.228.64.1                                         |
+| Production          | 20.253.170.58                                       |
+| Staging             | ?                                                   |
 
 * Kubernetes
 ** Create resources

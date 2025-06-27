@@ -1,4 +1,5 @@
-:host = http://20.228.64.1
+# :host = http://20.228.64.1
+:host = http://20.253.170.58
 
 # Check health
 GET :host/health
