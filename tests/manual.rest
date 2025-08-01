@@ -1,11 +1,11 @@
 # local
-# :host = http://127.0.0.1:8000
+:host = http://127.0.0.1:80
 
 # predictor
 # :host = http://20.228.64.1
 
 # predictor production
-:host = http://20.253.215.165
+# :host = http://20.253.215.165
 
 # Check health
 GET :host/health

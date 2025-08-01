@@ -1,0 +1,193 @@
+---
+# Source: predictor/templates/predictor.yaml
+# pangolin
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: predictor-local
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: predictor-local
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-sql
+  namespace: predictor-local
+data:
+  init.sql: |
+    \c jobs
+
+    CREATE TABLE job_history(
+        id SERIAL PRIMARY KEY,
+        job_type TEXT NOT NULL,
+        start_at TIMESTAMP NOT NULL,
+        end_at TIMESTAMP,
+        record_count INTEGER,
+        duration_estimate INTEGER,
+        CONSTRAINT valid_date_range CHECK (end_at IS NULL OR end_at >= start_at)
+    );
+
+    CREATE INDEX idx_job_history_job_type ON job_history (job_type);
+    CREATE INDEX idx_job_history_start_at ON job_history (start_at);
+    CREATE INDEX idx_job_history_end_at ON job_history (end_at);
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: predictor-local
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:latest
+        env:
+          - name: PGDATA
+            value: /var/lib/postgresql/data/pgdata
+          - name: POSTGRES_DB
+            value: "jobs"
+          - name: POSTGRES_USER
+            value: "jobs-user"
+          - name: POSTGRES_PASSWORD
+            value: "jobs-user-password"
+        ports:
+          - containerPort: 5432
+        volumeMounts:
+          - name: data
+            mountPath: /var/lib/postgresql/data
+          - name: init
+            mountPath: /docker-entrypoint-initdb.d
+        readinessProbe:
+          exec:
+            command:
+              - sh
+              - -c
+              - "pg_isready -U jobs-user"
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+        - name: init
+          configMap:
+            name: postgres-init-sql
+            items:
+              - key: "init.sql"
+                path: "init.sql"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: predictor-local
+  labels:
+    app: postgres
+spec:
+  selector:
+    app: postgres
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: predictor-api
+  namespace: predictor-local
+  labels:
+    app: predictor-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: predictor-api
+  template:
+    metadata:
+      labels:
+        app: predictor-api
+    spec:
+      containers:
+        - name: predictor-api
+          image: macnod/predictor-api:latest
+          imagePullPolicy: Always
+          env:
+            - name: PREDICTOR_API_DB_HOST
+              value: "postgres-service"
+            - name: PREDICTOR_API_DB_PORT
+              value: "5432"
+            - name: PREDICTOR_API_LOG_LEVEL
+              value: "info"
+      restartPolicy: Always
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: predictor-service
+  namespace: predictor-local
+  labels:
+    app: predictor-service
+spec:
+  type: NodePort
+  ports:
+    - port: 80
+      targetPort: 8000
+      nodePort: 30080
+  selector:
+    app: predictor-api
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: predictor-train-cron
+  namespace: predictor-local
+spec:
+  schedule: "0 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: predictor-train
+        spec:
+          containers:
+            - name: predictor-train
+              image: macnod/predictor-train:latest
+              imagePullPolicy: Always
+              env:
+                - name: PREDICTOR_LOG_LEVEL
+                  value: "info"
+                - name: PREDICTOR_DB_HOST
+                  value: "postgres-service"
+                - name: PREDICTOR_DB_PORT
+                  value: "5432"
+          restartPolicy: Never
+
